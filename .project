@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<projectDescription>
+	<name>HandTrackJava</name>
+	<buildSpec>
+    	<buildCommand>
+    		<name>org.eclipse.jdt.core.javabuilder</name>
+    		<arguments>
+    		</arguments>
+    	</buildCommand>
+    </buildSpec>
+    <natures>
+    	<nature>org.eclipse.jdt.core.javanature</nature>
+    </natures>
+	<classpath>
+    <classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
+</classpath>
+</projectDescription>
