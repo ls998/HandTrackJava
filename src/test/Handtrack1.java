@@ -19,8 +19,10 @@ import javax.swing.JPanel;
 import org.opencv.core.Core;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfPoint;
+import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.Point;
 import org.opencv.core.Rect;
+import org.opencv.core.RotatedRect;
 import org.opencv.core.Scalar;
 import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
@@ -105,10 +107,15 @@ public class Handtrack1 {
 		// Imgproc.morphologyEx(binImg, binImg, Imgproc.MORPH_OPEN, kernel);
 		// Imgproc.morphologyEx(binImg, binImg, Imgproc.MORPH_CLOSE, kernel);
 
-		
-		
-		
+		MatOfPoint bigContour = bigCont(binImg);
+
 		Imgproc.cvtColor(binImg, im, Imgproc.COLOR_GRAY2BGR);
+
+		if (bigContour != null) {
+			ArrayList<MatOfPoint> derp = new ArrayList<>();
+			derp.add(bigContour);
+			Imgproc.drawContours(im, derp, 0, new Scalar(255, 0, 255));
+		}
 	}
 
 	private void calibrate(Mat im) {
@@ -137,9 +144,26 @@ public class Handtrack1 {
 
 	private static final float smallest_area = 600.0f;
 
-	private static void bigCont(Mat im) {
+	private static MatOfPoint bigCont(Mat im) {
 		List<MatOfPoint> contours = new ArrayList<>();
-		Imgproc.findContours(im, contours, null, Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE);
+		Imgproc.findContours(im, contours, new Mat(), Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE);
+		double maxArea = smallest_area;
+		MatOfPoint biggestContour = null;
+		for (MatOfPoint contour : contours) {
+			if (contour.elemSize() > 0) {
+				MatOfPoint2f thing = new MatOfPoint2f(contour.toArray());
+				RotatedRect box = Imgproc.minAreaRect(thing);
+				if (box != null) {
+					Size size = box.size;
+					double area = size.width * size.height;
+					if (area > maxArea) {
+						maxArea = area;
+						biggestContour = contour;
+					}
+				}
+			}
+		}
+		return biggestContour;
 	}
 
 	private Mat cap = new Mat();
@@ -156,7 +180,7 @@ public class Handtrack1 {
 				@Override
 				public void run() {
 					capture.read(cap);
-					
+
 					if (cal) {
 						calibrate(cap);
 					} else {
@@ -164,7 +188,7 @@ public class Handtrack1 {
 					}
 					Imgproc.putText(cap, ((int) range.val[0]) + "," + ((int) range.val[1]) + "," + ((int) range.val[2]),
 							new Point(0, 15), 1, 1, new Scalar(0, 255, 0));
-					
+
 					BufferedImage buffer;
 					if (panel.image == null) {
 						buffer = new BufferedImage(cap.width(), cap.height(), BufferedImage.TYPE_3BYTE_BGR);
@@ -174,7 +198,7 @@ public class Handtrack1 {
 					byte[] data = ((DataBufferByte) buffer.getRaster().getDataBuffer()).getData();
 					cap.get(0, 0, data);
 					frame.repaint();
-					
+
 				}
 			};
 			this.timer = Executors.newSingleThreadScheduledExecutor();
@@ -239,7 +263,7 @@ public class Handtrack1 {
 						range.val[2] += change;
 					}
 				}
-				
+
 				if (flag) {
 					int i;
 					i = 0;
