@@ -114,21 +114,40 @@ public class Handtrack1 {
 
 		MatOfPoint2f bigContour = bigCont(binImg);
 
-		contInf(bigContour, scale);
-
-		fingers(bigContour, scale);
-
 		Imgproc.cvtColor(binImg, im, Imgproc.COLOR_GRAY2BGR);
 
-		if (biggest != null) {
-			ArrayList<MatOfPoint> derp = new ArrayList<>();
-			derp.add(biggest);
-			Imgproc.drawContours(im, derp, 0, new Scalar(255, 0, 0));
-		}
-		Point pt2 = new Point(cogPt.x + Math.sin(contourangle) * 40, cogPt.y + Math.cos(contourangle) * 40);
-		Imgproc.line(im, cogPt, pt2, new Scalar(0, 255, 255));
-		Imgproc.rectangle(im, cogPt, cogPt, new Scalar(0, 0, 255));
+		if (bigContour != null) {
+			contInf(bigContour, scale);
 
+			MatOfPoint2f t = new MatOfPoint2f();
+			Imgproc.approxPolyDP(bigContour, t, 3, true);
+			MatOfPoint approxContour = new MatOfPoint(t.toArray());
+
+			fingers(approxContour, scale);
+
+			reduceTips();
+
+			ArrayList<MatOfPoint> derp = new ArrayList<>();
+			derp.add(approxContour);
+			Imgproc.drawContours(im, derp, 0, new Scalar(255, 0, 0));
+
+			Point pt2 = new Point(cogPt.x + Math.sin(contourangle) * 40, cogPt.y + Math.cos(contourangle) * 40);
+			Imgproc.line(im, cogPt, pt2, new Scalar(0, 255, 255));
+			Imgproc.rectangle(im, cogPt, cogPt, new Scalar(0, 0, 255));
+
+			for (int i = 0; i < hull.height(); i++) {
+				double[] dat1 = approxContour.get((int) hull.get(i, 0)[0], 0);
+				double[] dat2 = approxContour.get((int) hull.get((i + 1) % hull.height(), 0)[0], 0);
+				Imgproc.line(im, new Point(dat1[0], dat1[1]), new Point(dat2[0], dat2[1]), new Scalar(255, 0, 0));
+			}
+
+			for (int i = 0; i < defectsTotal; i++) {
+				Imgproc.line(im, tipPts[i], foldPts[i], new Scalar(255, 0, 255));
+
+				Imgproc.line(im, tipPts[(int) ((i + 1) % defectsTotal)], foldPts[i], new Scalar(255, 0, 255));
+			}
+
+		}
 		sz = new Size(im.width() * scale, im.height() * scale);
 
 		Imgproc.resize(im, im, sz);
@@ -138,38 +157,39 @@ public class Handtrack1 {
 
 	private Point[] tipPts, foldPts;
 	private double[] depths;
+	private long defectsTotal;
+	private MatOfInt hull;
 
-	private void fingers(MatOfPoint2f bigContour, int scale) {
-		MatOfPoint2f t = new MatOfPoint2f();
-		Imgproc.approxPolyDP(bigContour, t, 3, true);
-		MatOfPoint approxContour = new MatOfPoint(t.toArray());
+	private void fingers(MatOfPoint approxContour, int scale) {
 
-		MatOfInt hull = new MatOfInt();
+		hull = new MatOfInt();
 
 		Imgproc.convexHull(approxContour, hull, false);
 
 		MatOfInt4 defects = new MatOfInt4();
 		Imgproc.convexityDefects(approxContour, hull, defects);
 
-		long defectsTotal = defects.total();
+		defectsTotal = defects.total();
 		if (defectsTotal > max_points) {
 			System.out.println("Processing " + max_points + " defect pts");
 			defectsTotal = max_points;
 		}
-
 		// copy defect information from defects sequence into arrays
 		for (int i = 0; i < defectsTotal; i++) {
-			double[] dat = defects.get(0, i);
+			double[] dat = defects.get(i, 0);
 
-			double[] startdat = approxContour.get(0, (int) dat[0]);
+			double[] startdat = approxContour.get((int) dat[0], 0);
+
 			Point startPt = new Point(startdat[0], startdat[1]);
+
 			tipPts[i] = new Point((int) Math.round(startPt.x * scale), (int) Math.round(startPt.y * scale));
+
 			// array contains coords of the fingertips
 
-			double[] enddat = approxContour.get(0, (int) dat[1]);
+			double[] enddat = approxContour.get((int) dat[1], 0);
 			Point endPt = new Point(enddat[0], enddat[1]);
 
-			double[] depthdat = approxContour.get(0, (int) dat[2]);
+			double[] depthdat = approxContour.get((int) dat[2], 0);
 			Point depthPt = new Point(depthdat[0], depthdat[1]);
 			foldPts[i] = new Point((int) Math.round(depthPt.x * scale), (int) Math.round(depthPt.y * scale));
 			// array contains coords of the skin fold between fingers
@@ -177,12 +197,10 @@ public class Handtrack1 {
 			depths[i] = dat[3] * scale;
 			// array contains distances from tips to folds
 		}
-
-		reduceTips(defectsTotal, tipPts, foldPts, depths);
 	}
 
-	private void reduceTips(long defectsTotal, Point[] tipPts2, Point[] foldPts2, double[] depths2) {
-		
+	private void reduceTips() {
+
 	}
 
 	private void calibrate(Mat im) {
@@ -323,26 +341,30 @@ public class Handtrack1 {
 
 				@Override
 				public void run() {
-					capture.read(cap);
+					try {
+						capture.read(cap);
 
-					if (cal) {
-						calibrate(cap);
-					} else {
-						hand(cap);
+						if (cal) {
+							calibrate(cap);
+						} else {
+							hand(cap);
+						}
+						Imgproc.putText(cap,
+								((int) range.val[0]) + "," + ((int) range.val[1]) + "," + ((int) range.val[2]),
+								new Point(0, 15), 1, 1, new Scalar(0, 255, 0));
+
+						BufferedImage buffer;
+						if (panel.image == null) {
+							buffer = new BufferedImage(cap.width(), cap.height(), BufferedImage.TYPE_3BYTE_BGR);
+							panel.image = buffer;
+						}
+						buffer = panel.image;
+						byte[] data = ((DataBufferByte) buffer.getRaster().getDataBuffer()).getData();
+						cap.get(0, 0, data);
+						frame.repaint();
+					} catch (Exception e) {
+						e.printStackTrace();
 					}
-					Imgproc.putText(cap, ((int) range.val[0]) + "," + ((int) range.val[1]) + "," + ((int) range.val[2]),
-							new Point(0, 15), 1, 1, new Scalar(0, 255, 0));
-
-					BufferedImage buffer;
-					if (panel.image == null) {
-						buffer = new BufferedImage(cap.width(), cap.height(), BufferedImage.TYPE_3BYTE_BGR);
-						panel.image = buffer;
-					}
-					buffer = panel.image;
-					byte[] data = ((DataBufferByte) buffer.getRaster().getDataBuffer()).getData();
-					cap.get(0, 0, data);
-					frame.repaint();
-
 				}
 			};
 			this.timer = Executors.newSingleThreadScheduledExecutor();
