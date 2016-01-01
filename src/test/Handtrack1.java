@@ -212,7 +212,7 @@ public class Handtrack1 {
 	private Mat kernel = new Mat();
 	private Point[] tipPts, foldPts;
 	private double[] depths;
-	private long defectsTotal;
+	private long numPoints;
 	private MatOfInt hull;
 	private Point cogPt;
 	private int contourangle;
@@ -288,10 +288,10 @@ public class Handtrack1 {
 				Imgproc.line(im, new Point(dat1[0], dat1[1]), new Point(dat2[0], dat2[1]), new Scalar(255, 0, 0));
 			}
 
-			for (int i = 0; i < defectsTotal; i++) {
+			for (int i = 0; i < numPoints; i++) {
 				Imgproc.line(im, tipPts[i], foldPts[i], new Scalar(255, 0, 255));
 
-				Imgproc.line(im, tipPts[(int) ((i + 1) % defectsTotal)], foldPts[i], new Scalar(255, 0, 255));
+				Imgproc.line(im, tipPts[(int) ((i + 1) % numPoints)], foldPts[i], new Scalar(255, 0, 255));
 			}
 
 		}
@@ -309,13 +309,13 @@ public class Handtrack1 {
 		MatOfInt4 defects = new MatOfInt4();
 		Imgproc.convexityDefects(approxContour, hull, defects);
 
-		defectsTotal = defects.total();
-		if (defectsTotal > max_points) {
+		numPoints = defects.total();
+		if (numPoints > max_points) {
 			System.out.println("Processing " + max_points + " defect pts");
-			defectsTotal = max_points;
+			numPoints = max_points;
 		}
 		// copy defect information from defects sequence into arrays
-		for (int i = 0; i < defectsTotal; i++) {
+		for (int i = 0; i < numPoints; i++) {
 			double[] dat = defects.get(i, 0);
 
 			double[] startdat = approxContour.get((int) dat[0], 0);
@@ -339,8 +339,37 @@ public class Handtrack1 {
 		}
 	}
 
+	// globals
+	private static final int MIN_FINGER_DEPTH = 20;
+	private static final int MAX_FINGER_ANGLE = 60;   // degrees
+	
 	private void reduceTips() {
+		fingerTips.clear();
+		for (int i=0; i < numPoints; i++) {
+		    if (depths[i] < MIN_FINGER_DEPTH)    // defect too shallow
+		      continue;
+		    
+		    // look at fold points on either side of a tip
+		    int pdx = (int) ((i == 0) ? (numPoints-1) : (i - 1)); // predecessor of i
+		    int sdx = (i == numPoints-1) ? 0 : (i + 1);   // successor of i
+		
+		    int angle = angleBetween(tipPts[i], foldPts[pdx], foldPts[sdx]);
+		    if (angle >= MAX_FINGER_ANGLE)    
+		      continue;      // angle between finger and folds too wide
 
+		    // this point is probably a fingertip, so add to list
+		    fingerTips.add(tipPts[i]);
+		}
+	}
+	
+	private int angleBetween(Point tip, Point next, Point prev)
+	// calculate the angle between the tip and its neighboring folds
+	// (in integer degrees)
+	{
+	  return Math.abs( (int)Math.round(
+	            Math.toDegrees(
+	                  Math.atan2(next.x - tip.x, next.y - tip.y) -
+	                  Math.atan2(prev.x - tip.x, prev.y - tip.y)) ));
 	}
 
 	private MatOfPoint2f bigCont(Mat im) {
