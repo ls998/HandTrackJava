@@ -18,6 +18,8 @@ import javax.swing.JPanel;
 
 import org.opencv.core.Core;
 import org.opencv.core.Mat;
+import org.opencv.core.MatOfInt;
+import org.opencv.core.MatOfInt4;
 import org.opencv.core.MatOfPoint;
 import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.Point;
@@ -26,6 +28,7 @@ import org.opencv.core.RotatedRect;
 import org.opencv.core.Scalar;
 import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
+import org.opencv.imgproc.Moments;
 import org.opencv.videoio.VideoCapture;
 
 public class Handtrack1 {
@@ -79,21 +82,23 @@ public class Handtrack1 {
 	 */
 	public Handtrack1() {
 		initialize();
-		initCam();
+		initCV();
 	}
 
 	private Mat kernel = new Mat();
 
 	private Scalar lower = new Scalar(0, 0, 0);
 	private Scalar upper = new Scalar(20, 255, 255);
-	private Scalar range = new Scalar(20, 50, 50);
+	private Scalar range = new Scalar(60, 60, 250);
 	private Scalar mean = new Scalar(0, 0, 0);
+
+	private static final int scale = 1;
 
 	private void hand(Mat im) {
 		// resize to for faster speed
-		// Size sz = new Size(im.width() / 2, im.height() / 2);
+		Size sz = new Size(im.width() / scale, im.height() / scale);
 
-		// Imgproc.resize(im, im, sz);
+		Imgproc.resize(im, im, sz);
 
 		// convert to hsv colour space
 		Imgproc.cvtColor(im, im, Imgproc.COLOR_BGR2HSV);
@@ -103,19 +108,81 @@ public class Handtrack1 {
 		Core.inRange(im, lower, upper, binImg);
 
 		// DESTROY SPECKSSSQ!!!!
-		Imgproc.morphologyEx(binImg, binImg, Imgproc.MORPH_OPEN, kernel);
 		// Imgproc.morphologyEx(binImg, binImg, Imgproc.MORPH_OPEN, kernel);
-		// Imgproc.morphologyEx(binImg, binImg, Imgproc.MORPH_CLOSE, kernel);
+		// Imgproc.morphologyEx(binImg, binImg, Imgproc.MORPH_OPEN, kernel);
+		Imgproc.morphologyEx(binImg, binImg, Imgproc.MORPH_CLOSE, kernel);
 
-		MatOfPoint bigContour = bigCont(binImg);
+		MatOfPoint2f bigContour = bigCont(binImg);
+
+		contInf(bigContour, scale);
+
+		fingers(bigContour, scale);
 
 		Imgproc.cvtColor(binImg, im, Imgproc.COLOR_GRAY2BGR);
 
-		if (bigContour != null) {
+		if (biggest != null) {
 			ArrayList<MatOfPoint> derp = new ArrayList<>();
-			derp.add(bigContour);
-			Imgproc.drawContours(im, derp, 0, new Scalar(255, 0, 255));
+			derp.add(biggest);
+			Imgproc.drawContours(im, derp, 0, new Scalar(255, 0, 0));
 		}
+		Point pt2 = new Point(cogPt.x + Math.sin(contourangle) * 40, cogPt.y + Math.cos(contourangle) * 40);
+		Imgproc.line(im, cogPt, pt2, new Scalar(0, 255, 255));
+		Imgproc.rectangle(im, cogPt, cogPt, new Scalar(0, 0, 255));
+
+		sz = new Size(im.width() * scale, im.height() * scale);
+
+		Imgproc.resize(im, im, sz);
+	}
+
+	private static final int max_points = 20;
+
+	private Point[] tipPts, foldPts;
+	private double[] depths;
+
+	private void fingers(MatOfPoint2f bigContour, int scale) {
+		MatOfPoint2f t = new MatOfPoint2f();
+		Imgproc.approxPolyDP(bigContour, t, 3, true);
+		MatOfPoint approxContour = new MatOfPoint(t.toArray());
+
+		MatOfInt hull = new MatOfInt();
+
+		Imgproc.convexHull(approxContour, hull, false);
+
+		MatOfInt4 defects = new MatOfInt4();
+		Imgproc.convexityDefects(approxContour, hull, defects);
+
+		long defectsTotal = defects.total();
+		if (defectsTotal > max_points) {
+			System.out.println("Processing " + max_points + " defect pts");
+			defectsTotal = max_points;
+		}
+
+		// copy defect information from defects sequence into arrays
+		for (int i = 0; i < defectsTotal; i++) {
+			double[] dat = defects.get(0, i);
+
+			double[] startdat = approxContour.get(0, (int) dat[0]);
+			Point startPt = new Point(startdat[0], startdat[1]);
+			tipPts[i] = new Point((int) Math.round(startPt.x * scale), (int) Math.round(startPt.y * scale));
+			// array contains coords of the fingertips
+
+			double[] enddat = approxContour.get(0, (int) dat[1]);
+			Point endPt = new Point(enddat[0], enddat[1]);
+
+			double[] depthdat = approxContour.get(0, (int) dat[2]);
+			Point depthPt = new Point(depthdat[0], depthdat[1]);
+			foldPts[i] = new Point((int) Math.round(depthPt.x * scale), (int) Math.round(depthPt.y * scale));
+			// array contains coords of the skin fold between fingers
+
+			depths[i] = dat[3] * scale;
+			// array contains distances from tips to folds
+		}
+
+		reduceTips(defectsTotal, tipPts, foldPts, depths);
+	}
+
+	private void reduceTips(long defectsTotal, Point[] tipPts2, Point[] foldPts2, double[] depths2) {
+		
 	}
 
 	private void calibrate(Mat im) {
@@ -143,14 +210,21 @@ public class Handtrack1 {
 	}
 
 	private static final float smallest_area = 600.0f;
+	private MatOfPoint biggest;
 
-	private static MatOfPoint bigCont(Mat im) {
+	private MatOfPoint2f bigCont(Mat im) {
+		// get all contours
 		List<MatOfPoint> contours = new ArrayList<>();
 		Imgproc.findContours(im, contours, new Mat(), Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE);
+
+		// find biggest
 		double maxArea = smallest_area;
-		MatOfPoint biggestContour = null;
+		MatOfPoint2f biggestContour = null;
+
 		for (MatOfPoint contour : contours) {
+			// makes sure isn't empty contour
 			if (contour.elemSize() > 0) {
+				// calcuate size of contour
 				MatOfPoint2f thing = new MatOfPoint2f(contour.toArray());
 				RotatedRect box = Imgproc.minAreaRect(thing);
 				if (box != null) {
@@ -158,7 +232,8 @@ public class Handtrack1 {
 					double area = size.width * size.height;
 					if (area > maxArea) {
 						maxArea = area;
-						biggestContour = contour;
+						biggestContour = thing;
+						biggest = contour;
 					}
 				}
 			}
@@ -166,12 +241,81 @@ public class Handtrack1 {
 		return biggestContour;
 	}
 
+	private Point cogPt;
+
+	private int contourangle;
+
+	private ArrayList<Point> fingerTips;
+
+	private void contInf(MatOfPoint2f contour, int scale) {
+		Moments moments = Imgproc.moments(contour, true);
+		double m00 = moments.m00;
+		double m10 = moments.m10;
+		double m01 = moments.m01;
+		if (m00 != 0) { // calculate center
+			cogPt.x = (int) Math.round(m10 / m00) * scale;
+			cogPt.y = (int) Math.round(m01 / m00) * scale;
+		}
+
+		// calculate angle
+		double m11 = moments.m11;
+		double m20 = moments.m20;
+		double m02 = moments.m02;
+		contourangle = calculateTilt(m11, m20, m02);
+
+		if (fingerTips.size() > 0) {
+			int yTotal = 0;
+			for (Point pt : fingerTips)
+				yTotal += pt.y;
+			int avgYFinger = yTotal / fingerTips.size();
+			if (avgYFinger > cogPt.y) // fingers below COG
+				contourangle += 180;
+		}
+		contourangle = 180 - contourangle;
+	}
+
+	private int calculateTilt(double m11, double m20, double m02) {
+		double diff = m20 - m02;
+		if (diff == 0) {
+			if (m11 == 0)
+				return 0;
+			else if (m11 > 0)
+				return 45;
+			else // m11 < 0
+				return -45;
+		}
+
+		double theta = 0.5 * Math.atan2(2 * m11, diff);
+		int tilt = (int) Math.round(Math.toDegrees(theta));
+
+		if ((diff > 0) && (m11 == 0))
+			return 0;
+		else if ((diff < 0) && (m11 == 0))
+			return -90;
+		else if ((diff > 0) && (m11 > 0)) // 0 to 45 degrees
+			return tilt;
+		else if ((diff > 0) && (m11 < 0)) // -45 to 0
+			return (180 + tilt); // change to counter-clockwise angle
+		else if ((diff < 0) && (m11 > 0)) // 45 to 90
+			return tilt;
+		else if ((diff < 0) && (m11 < 0)) // -90 to -45
+			return (180 + tilt); // change to counter-clockwise angle
+
+		System.out.println("Error in moments for tilt angle");
+		return 0;
+	}
+
 	private Mat cap = new Mat();
 	private ImagePanel panel;
 
 	private volatile boolean cal = true;
 
-	private void initCam() {
+	private void initCV() {
+		tipPts = new Point[max_points];
+		foldPts = new Point[max_points];
+		depths = new double[max_points];
+		fingerTips = new ArrayList<>();
+		cogPt = new Point();
 		capture = new VideoCapture();
 		capture.open(0);
 		if (capture.isOpened()) {
