@@ -83,7 +83,6 @@ public class Handtrack1 {
 		initialize();
 		initCV();
 	}
-	
 
 	/**
 	 * Initialize the contents of the frame.
@@ -261,7 +260,7 @@ public class Handtrack1 {
 
 		MatOfPoint2f bigContour = bigCont(cpy);
 
-		Imgproc.cvtColor(binImg, im, Imgproc.COLOR_GRAY2BGR);
+		// Imgproc.cvtColor(binImg, im, Imgproc.COLOR_GRAY2BGR);
 
 		if (bigContour != null) {
 			contInf(bigContour, scale);
@@ -278,7 +277,8 @@ public class Handtrack1 {
 			derp.add(approxContour);
 			Imgproc.drawContours(im, derp, 0, new Scalar(255, 0, 0));
 
-			Point pt2 = new Point(cogPt.x + Math.sin(contourangle) * 40, cogPt.y + Math.cos(contourangle) * 40);
+			double g = Math.toRadians(contourangle);
+			Point pt2 = new Point(cogPt.x + Math.sin(g) * 50, cogPt.y + Math.cos(g) * 50);
 			Imgproc.line(im, cogPt, pt2, new Scalar(0, 255, 255));
 			Imgproc.rectangle(im, cogPt, cogPt, new Scalar(0, 0, 255));
 
@@ -292,6 +292,18 @@ public class Handtrack1 {
 				Imgproc.line(im, tipPts[i], foldPts[i], new Scalar(255, 0, 255));
 
 				Imgproc.line(im, tipPts[(int) ((i + 1) % numPoints)], foldPts[i], new Scalar(255, 0, 255));
+			}
+
+			for (int i = 0; i < fingerTips.size(); i++) {
+				Point tip = fingerTips.get(i);
+				double a = Math.toRadians(angles[i]);
+				Point p2 = new Point(tip.x + Math.sin(a) * 50, tip.y + Math.cos(a) * 50);
+				Imgproc.line(im, p2, tip, new Scalar(255, 255, 255));
+
+				tip.x--;
+				tip.y--;
+
+				Imgproc.rectangle(im, tip, new Point(tip.x + 2, tip.y + 2), new Scalar(0, 255, 255));
 			}
 
 		}
@@ -341,35 +353,36 @@ public class Handtrack1 {
 
 	// globals
 	private static final int MIN_FINGER_DEPTH = 20;
-	private static final int MAX_FINGER_ANGLE = 60;   // degrees
-	
+	private static final int MAX_FINGER_ANGLE = 60; // degrees
+
+	private int[] angles;
+
 	private void reduceTips() {
 		fingerTips.clear();
-		for (int i=0; i < numPoints; i++) {
-		    if (depths[i] < MIN_FINGER_DEPTH)    // defect too shallow
-		      continue;
-		    
-		    // look at fold points on either side of a tip
-		    int pdx = (int) ((i == 0) ? (numPoints-1) : (i - 1)); // predecessor of i
-		    int sdx = (i == numPoints-1) ? 0 : (i + 1);   // successor of i
-		
-		    int angle = angleBetween(tipPts[i], foldPts[pdx], foldPts[sdx]);
-		    if (angle >= MAX_FINGER_ANGLE)    
-		      continue;      // angle between finger and folds too wide
+		for (int i = 0; i < numPoints; i++) {
+			if (depths[i] < MIN_FINGER_DEPTH) // defect too shallow
+				continue;
 
-		    // this point is probably a fingertip, so add to list
-		    fingerTips.add(tipPts[i]);
+			// look at fold points on either side of a tip
+			int pdx = (int) ((i == 0) ? (numPoints - 1) : (i - 1)); // predecessor
+																	// of i
+			int sdx = (i == numPoints - 1) ? 0 : (i + 1); // successor of i
+
+			int angle = angleBetween(tipPts[i], foldPts[pdx], foldPts[sdx]);
+			if (angle >= MAX_FINGER_ANGLE)
+				continue;
+			angles[fingerTips.size()] = angle;
+			// this point is probably a fingertip, so add to list
+			fingerTips.add(tipPts[i]);
 		}
 	}
-	
+
 	private int angleBetween(Point tip, Point next, Point prev)
 	// calculate the angle between the tip and its neighboring folds
 	// (in integer degrees)
 	{
-	  return Math.abs( (int)Math.round(
-	            Math.toDegrees(
-	                  Math.atan2(next.x - tip.x, next.y - tip.y) -
-	                  Math.atan2(prev.x - tip.x, prev.y - tip.y)) ));
+		return Math.abs((int) Math.round(Math
+				.toDegrees(Math.atan2(next.x - tip.x, next.y - tip.y) - Math.atan2(prev.x - tip.x, prev.y - tip.y))));
 	}
 
 	private MatOfPoint2f bigCont(Mat im) {
@@ -487,6 +500,7 @@ public class Handtrack1 {
 		tipPts = new Point[max_points];
 		foldPts = new Point[max_points];
 		depths = new double[max_points];
+		angles = new int[max_points];
 		fingerTips = new ArrayList<>();
 		cogPt = new Point();
 		capture = new VideoCapture();
@@ -526,6 +540,5 @@ public class Handtrack1 {
 			this.timer.scheduleAtFixedRate(frameGrabber, 0, 33, TimeUnit.MILLISECONDS);
 		}
 	}
-
 
 }
