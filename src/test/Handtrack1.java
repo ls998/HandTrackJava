@@ -38,14 +38,14 @@ public class Handtrack1 {
 	enum FingerName {
 		LITTLE, RING, MIDDLE, INDEX, THUMB, UNKNOWN;
 
-		public FingerName getPrev() {
+		public FingerName getNext() {
 			int nextIdx = ordinal() + 1;
 			if (nextIdx == (values().length))
 				nextIdx = 0;
 			return values()[nextIdx];
 		} // end of getNext()
 
-		public FingerName getNext() {
+		public FingerName getPrev() {
 			int prevIdx = ordinal() - 1;
 			if (prevIdx < 0)
 				prevIdx = values().length - 1;
@@ -225,13 +225,13 @@ public class Handtrack1 {
 
 	private static final int max_points = 20;
 	private static final float smallest_area = 600.0f;
+	private static final int scale = 2;
 
 	// settings
 	private Scalar lower = new Scalar(0, 0, 0);
 	private Scalar upper = new Scalar(20, 255, 255);
 	private Scalar range = new Scalar(110, 200, 60);
 	private Scalar mean = new Scalar(90, 170, 17);
-	private static final int scale = 1;
 	private int kernelmode;
 	private boolean useCustomKernel;
 	private int size = 4;
@@ -246,7 +246,6 @@ public class Handtrack1 {
 	private long numPoints;
 	private MatOfInt hull;
 	private Point cogPt;
-	private int contourangle;
 	private ArrayList<Point> fingerTips;
 	private Mat cap = new Mat();
 	private ImagePanel panel;
@@ -311,65 +310,48 @@ public class Handtrack1 {
 		}
 
 		if (bigContour != null) {
-			contInf(bigContour, scale);
+			contInf(bigContour);
 
 			MatOfPoint2f t = new MatOfPoint2f();
 			Imgproc.approxPolyDP(bigContour, t, 3, true);
 			MatOfPoint approxContour = new MatOfPoint(t.toArray());
 
-			fingers(approxContour, scale);
+			toStar(approxContour);
 
 			reduceTips();
 
-			ArrayList<MatOfPoint> derp = new ArrayList<>();
-			derp.add(approxContour);
-			Imgproc.drawContours(im, derp, 0, new Scalar(255, 0, 0));
-
-			double g = Math.toRadians(contourangle);
-			Point pt2 = new Point(cogPt.x + Math.sin(g) * 50, cogPt.y + Math.cos(g) * 50);
-			Imgproc.line(im, cogPt, pt2, new Scalar(0, 255, 255));
-			Imgproc.rectangle(im, cogPt, cogPt, new Scalar(0, 0, 255));
-
-			for (int i = 0; i < hull.height(); i++) {
-				double[] dat1 = approxContour.get((int) hull.get(i, 0)[0], 0);
-				double[] dat2 = approxContour.get((int) hull.get((i + 1) % hull.height(), 0)[0], 0);
-				Imgproc.line(im, new Point(dat1[0], dat1[1]), new Point(dat2[0], dat2[1]), new Scalar(255, 0, 0));
-			}
-
-			for (int i = 0; i < numPoints; i++) {
-				Imgproc.line(im, tipPts[i], foldPts[i], new Scalar(255, 0, 255));
-
-				Imgproc.line(im, tipPts[(int) ((i + 1) % numPoints)], foldPts[i], new Scalar(255, 0, 255));
-			}
+			Imgproc.rectangle(im, cogPt, cogPt, new Scalar(0, 255, 255));
 
 			for (Rect rect : faceDetections.toArray()) {
 				Imgproc.rectangle(im, rect.br(), rect.tl(), new Scalar(0, 0, 255));
 			}
 
-			nameFingers();
+			for (int i = 0; i < numPoints; i++) {
+				Imgproc.circle(im, tipPts[i], 2, new Scalar(0, 0, 255));
+				Imgproc.circle(im, foldPts[i], 2, new Scalar(255, 0, 0));
+			}
+
+			// nameFingers();
+
+			int count = 0;
 
 			for (int i = 0; i < fingerTips.size(); i++) {
 				Point tip = fingerTips.get(i);
-				double a = Math.toRadians(angles[i]);
-				Point p2 = new Point(tip.x + Math.sin(a) * 50, tip.y + Math.cos(a) * 50);
-				Imgproc.line(im, p2, tip, new Scalar(255, 255, 255));
 
-				Imgproc.putText(im, namedFingers.get(i).toString(), tip, 1, 1, new Scalar(255, 255, 255));
+				if (tip.y > cogPt.y)
+					continue;
 
-				tip.x--;
-				tip.y--;
-
-				Imgproc.rectangle(im, tip, new Point(tip.x + 2, tip.y + 2), new Scalar(0, 255, 255));
-
+				count++;
+				Imgproc.circle(im, tip, 3, new Scalar(0, 255, 255));
 			}
-
+			Imgproc.putText(im, "" + count, new Point(0, 100), 1, 2, new Scalar(0, 0, 0));
 		}
 		sz = new Size(im.width() * scale, im.height() * scale);
 
 		Imgproc.resize(im, im, sz);
 	}
 
-	private void fingers(MatOfPoint approxContour, int scale) {
+	private void toStar(MatOfPoint approxContour) {
 
 		hull = new MatOfInt();
 
@@ -391,7 +373,7 @@ public class Handtrack1 {
 
 			Point startPt = new Point(startdat[0], startdat[1]);
 
-			tipPts[i] = new Point((int) Math.round(startPt.x * scale), (int) Math.round(startPt.y * scale));
+			tipPts[i] = new Point((int) Math.round(startPt.x), (int) Math.round(startPt.y));
 
 			// array contains coords of the fingertips
 
@@ -400,10 +382,10 @@ public class Handtrack1 {
 
 			double[] depthdat = approxContour.get((int) dat[2], 0);
 			Point depthPt = new Point(depthdat[0], depthdat[1]);
-			foldPts[i] = new Point((int) Math.round(depthPt.x * scale), (int) Math.round(depthPt.y * scale));
+			foldPts[i] = new Point((int) Math.round(depthPt.x), (int) Math.round(depthPt.y));
 			// array contains coords of the skin fold between fingers
 
-			depths[i] = dat[3] * scale;
+			depths[i] = dat[3];
 			// array contains distances from tips to folds
 		}
 	}
@@ -427,13 +409,12 @@ public class Handtrack1 {
 		labelUnknowns();
 	}
 
-	private int angleToCOG(Point tipPt, Point cogPt, int contourAxisAngle) {
+	private int angleToCOG(Point tipPt) {
 		int yOffset = (int) (cogPt.y - tipPt.y); // make y positive up screen
 		int xOffset = (int) (tipPt.x - cogPt.x);
 		double theta = Math.atan2(yOffset, xOffset);
 		int angleTip = (int) Math.round(Math.toDegrees(theta));
-		return angleTip + (90 - contourAxisAngle);
-		// this ensures that the hand is orientated straight up
+		return angleTip - 90;
 	}
 
 	private void labelThumbIndex() {
@@ -441,7 +422,7 @@ public class Handtrack1 {
 		boolean foundIndex = false;
 		int i = fingerTips.size() - 1;
 		while ((i >= 0)) {
-			int angle = angleToCOG(fingerTips.get(i), cogPt, contourangle);
+			int angle = angleToCOG(fingerTips.get(i));
 			// check for thumb
 			if ((angle <= MAX_THUMB) && (angle > MIN_THUMB) && !foundThumb) {
 				namedFingers.set(i, FingerName.THUMB);
@@ -510,9 +491,8 @@ public class Handtrack1 {
 	}
 
 	private static final int MIN_FINGER_DEPTH = 20;
-	private static final int MAX_FINGER_ANGLE = 60; // degrees
-
-	private int[] angles;
+	private static final int MAX_FINGER_ANGLE = 60;
+	private static final int MIN_FINGER_ANGLE = 15;
 
 	private void reduceTips() {
 		fingerTips.clear();
@@ -528,7 +508,8 @@ public class Handtrack1 {
 			int angle = angleBetween(tipPts[i], foldPts[pdx], foldPts[sdx]);
 			if (angle >= MAX_FINGER_ANGLE)
 				continue;
-			angles[fingerTips.size()] = angle;
+			// if (angle < MIN_FINGER_ANGLE)
+			// continue;
 			// this point is probably a fingertip, so add to list
 			fingerTips.add(tipPts[i]);
 		}
@@ -570,67 +551,24 @@ public class Handtrack1 {
 		return biggestContour;
 	}
 
-	private void contInf(MatOfPoint2f contour, int scale) {
+	private void contInf(MatOfPoint2f contour) {
 		Moments moments = Imgproc.moments(contour, true);
 		double m00 = moments.m00;
 		double m10 = moments.m10;
 		double m01 = moments.m01;
 		if (m00 != 0) { // calculate center
-			cogPt.x = (int) Math.round(m10 / m00) * scale;
-			cogPt.y = (int) Math.round(m01 / m00) * scale;
+			cogPt.x = (int) Math.round(m10 / m00);
+			cogPt.y = (int) Math.round(m01 / m00);
 		}
-
-		// calculate angle
-		double m11 = moments.m11;
-		double m20 = moments.m20;
-		double m02 = moments.m02;
-		contourangle = calculateTilt(m11, m20, m02);
-
-		if (fingerTips.size() > 0) {
-			int yTotal = 0;
-			for (Point pt : fingerTips)
-				yTotal += pt.y;
-			int avgYFinger = yTotal / fingerTips.size();
-			if (avgYFinger > cogPt.y) // fingers below COG
-				contourangle += 180;
-		}
-		contourangle = 180 - contourangle;
-	}
-
-	private int calculateTilt(double m11, double m20, double m02) {
-		double diff = m20 - m02;
-		if (diff == 0) {
-			if (m11 == 0)
-				return 0;
-			else if (m11 > 0)
-				return 45;
-			else // m11 < 0
-				return -45;
-		}
-
-		double theta = 0.5 * Math.atan2(2 * m11, diff);
-		int tilt = (int) Math.round(Math.toDegrees(theta));
-
-		if ((diff > 0) && (m11 == 0))
-			return 0;
-		else if ((diff < 0) && (m11 == 0))
-			return -90;
-		else if ((diff > 0) && (m11 > 0)) // 0 to 45 degrees
-			return tilt;
-		else if ((diff > 0) && (m11 < 0)) // -45 to 0
-			return (180 + tilt); // change to counter-clockwise angle
-		else if ((diff < 0) && (m11 > 0)) // 45 to 90
-			return tilt;
-		else if ((diff < 0) && (m11 < 0)) // -90 to -45
-			return (180 + tilt); // change to counter-clockwise angle
-
-		System.out.println("Error in moments for tilt angle");
-		return 0;
 	}
 
 	private void calibrate(Mat im) {
+
+		java.awt.Point d = frame.getMousePosition();
+		if (d == null)
+			d = new java.awt.Point(100, 100);
 		Imgproc.cvtColor(im, im, Imgproc.COLOR_BGR2HSV);
-		Mat rect = new Mat(im, new Rect(new Point(100, 100), new Point(150, 150)));
+		Mat rect = new Mat(im, new Rect(new Point(d.getX(), d.getY()), new Point(d.getX() + 50, d.getY() + 50)));
 		mean = Core.mean(rect);
 		int i;
 		i = 0;
@@ -647,19 +585,21 @@ public class Handtrack1 {
 		upper.val[i] = Math.min(255, mean.val[i] + range.val[i]);
 
 		Imgproc.cvtColor(im, im, Imgproc.COLOR_HSV2BGR);
-		Imgproc.rectangle(im, new Point(100, 100), new Point(150, 150), new Scalar(0, 255, 0));
+
+		Imgproc.rectangle(im, new Point(d.getX(), d.getY()), new Point(d.getX() + 50, d.getY() + 50),
+				new Scalar(0, 255, 0));
 		Imgproc.putText(im, ((int) mean.val[0]) + "," + ((int) mean.val[1]) + "," + ((int) mean.val[2]),
 				new Point(170, 170), 1, 1, new Scalar(0, 255, 0));
 	}
 
 	private void initCV() {
 		namedFingers = new ArrayList<>();
-		faceDetector = new CascadeClassifier(Handtrack1.class.getResource("haarcascade_frontalface_alt.xml").getPath());
+		faceDetector = new CascadeClassifier(
+				"C:\\Users\\sunny\\lib\\opencv-3.1.0\\sources\\data\\haarcascades\\haarcascade_frontalface_alt.xml");
 		kernelcust = Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, new Size(size, size));
 		tipPts = new Point[max_points];
 		foldPts = new Point[max_points];
 		depths = new double[max_points];
-		angles = new int[max_points];
 		fingerTips = new ArrayList<>();
 		cogPt = new Point();
 		capture = new VideoCapture();
