@@ -22,6 +22,7 @@ import org.opencv.core.MatOfInt;
 import org.opencv.core.MatOfInt4;
 import org.opencv.core.MatOfPoint;
 import org.opencv.core.MatOfPoint2f;
+import org.opencv.core.MatOfRect;
 import org.opencv.core.Point;
 import org.opencv.core.Rect;
 import org.opencv.core.RotatedRect;
@@ -29,9 +30,29 @@ import org.opencv.core.Scalar;
 import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.imgproc.Moments;
+import org.opencv.objdetect.CascadeClassifier;
 import org.opencv.videoio.VideoCapture;
 
 public class Handtrack1 {
+
+	enum FingerName {
+		LITTLE, RING, MIDDLE, INDEX, THUMB, UNKNOWN;
+
+		public FingerName getPrev() {
+			int nextIdx = ordinal() + 1;
+			if (nextIdx == (values().length))
+				nextIdx = 0;
+			return values()[nextIdx];
+		} // end of getNext()
+
+		public FingerName getNext() {
+			int prevIdx = ordinal() - 1;
+			if (prevIdx < 0)
+				prevIdx = values().length - 1;
+			return values()[prevIdx];
+		} // end of getPrev()
+
+	}
 
 	static {
 
@@ -105,6 +126,7 @@ public class Handtrack1 {
 
 			@Override
 			public void keyPressed(KeyEvent e) {
+
 				if (e.getKeyCode() == KeyEvent.VK_1) {
 					kernelmode = 1;
 				}
@@ -133,8 +155,17 @@ public class Handtrack1 {
 				int change = 10;
 				if (e.isShiftDown())
 					change = 1;
-				if (e.isAltDown())
-					change = 100;
+				if (e.isAltDown()) {
+					if (e.getKeyCode() == KeyEvent.VK_H) {
+						viewmode = 1;
+					}
+					if (e.getKeyCode() == KeyEvent.VK_B) {
+						viewmode = 2;
+					}
+					if (e.getKeyCode() == KeyEvent.VK_R) {
+						viewmode = 3;
+					}
+				}
 				if (e.isControlDown()) {
 					if (e.getKeyCode() == KeyEvent.VK_H) {
 						flag = true;
@@ -204,6 +235,7 @@ public class Handtrack1 {
 	private int kernelmode;
 	private boolean useCustomKernel;
 	private int size = 4;
+	private int viewmode = 1;
 
 	private volatile boolean cal = true;
 
@@ -219,6 +251,7 @@ public class Handtrack1 {
 	private Mat cap = new Mat();
 	private ImagePanel panel;
 	private VideoCapture capture;
+	private CascadeClassifier faceDetector;
 
 	private void hand(Mat im) {
 		// resize to for faster speed
@@ -226,12 +259,22 @@ public class Handtrack1 {
 
 		Imgproc.resize(im, im, sz);
 
+		MatOfRect faceDetections = new MatOfRect();
+		faceDetector.detectMultiScale(im, faceDetections);
+
 		// convert to hsv colour space
 		Imgproc.cvtColor(im, im, Imgproc.COLOR_BGR2HSV);
 
 		// filter skin
 		Mat binImg = new Mat();
 		Core.inRange(im, lower, upper, binImg);
+
+		// destroy face
+
+		for (Rect rect : faceDetections.toArray()) {
+			Mat sel = new Mat(binImg, rect);
+			sel.setTo(new Scalar(0));
+		}
 
 		// DESTROY SPECKSSSQ!!!!
 		// Imgproc.erode(binImg, binImg, kernel);
@@ -260,7 +303,12 @@ public class Handtrack1 {
 
 		MatOfPoint2f bigContour = bigCont(cpy);
 
-		// Imgproc.cvtColor(binImg, im, Imgproc.COLOR_GRAY2BGR);
+		if (viewmode == 2) {
+			Imgproc.cvtColor(binImg, im, Imgproc.COLOR_GRAY2BGR);
+		}
+		if (viewmode == 3) {
+			Imgproc.cvtColor(im, im, Imgproc.COLOR_HSV2BGR);
+		}
 
 		if (bigContour != null) {
 			contInf(bigContour, scale);
@@ -294,16 +342,25 @@ public class Handtrack1 {
 				Imgproc.line(im, tipPts[(int) ((i + 1) % numPoints)], foldPts[i], new Scalar(255, 0, 255));
 			}
 
+			for (Rect rect : faceDetections.toArray()) {
+				Imgproc.rectangle(im, rect.br(), rect.tl(), new Scalar(0, 0, 255));
+			}
+
+			nameFingers();
+
 			for (int i = 0; i < fingerTips.size(); i++) {
 				Point tip = fingerTips.get(i);
 				double a = Math.toRadians(angles[i]);
 				Point p2 = new Point(tip.x + Math.sin(a) * 50, tip.y + Math.cos(a) * 50);
 				Imgproc.line(im, p2, tip, new Scalar(255, 255, 255));
 
+				Imgproc.putText(im, namedFingers.get(i).toString(), tip, 1, 1, new Scalar(255, 255, 255));
+
 				tip.x--;
 				tip.y--;
 
 				Imgproc.rectangle(im, tip, new Point(tip.x + 2, tip.y + 2), new Scalar(0, 255, 255));
+
 			}
 
 		}
@@ -352,6 +409,106 @@ public class Handtrack1 {
 	}
 
 	// globals
+	private static final int MIN_THUMB = 120; // angle ranges
+	private static final int MAX_THUMB = 200;
+
+	private static final int MIN_INDEX = 60;
+	private static final int MAX_INDEX = 120;
+
+	// globals
+	private ArrayList<FingerName> namedFingers;
+
+	private void nameFingers() { // reset all named fingers to unknown
+		namedFingers.clear();
+		for (int i = 0; i < fingerTips.size(); i++)
+			namedFingers.add(FingerName.UNKNOWN);
+
+		labelThumbIndex();
+		labelUnknowns();
+	}
+
+	private int angleToCOG(Point tipPt, Point cogPt, int contourAxisAngle) {
+		int yOffset = (int) (cogPt.y - tipPt.y); // make y positive up screen
+		int xOffset = (int) (tipPt.x - cogPt.x);
+		double theta = Math.atan2(yOffset, xOffset);
+		int angleTip = (int) Math.round(Math.toDegrees(theta));
+		return angleTip + (90 - contourAxisAngle);
+		// this ensures that the hand is orientated straight up
+	}
+
+	private void labelThumbIndex() {
+		boolean foundThumb = false;
+		boolean foundIndex = false;
+		int i = fingerTips.size() - 1;
+		while ((i >= 0)) {
+			int angle = angleToCOG(fingerTips.get(i), cogPt, contourangle);
+			// check for thumb
+			if ((angle <= MAX_THUMB) && (angle > MIN_THUMB) && !foundThumb) {
+				namedFingers.set(i, FingerName.THUMB);
+				foundThumb = true;
+			}
+
+			// check for index
+			if ((angle <= MAX_INDEX) && (angle > MIN_INDEX) && !foundIndex) {
+				namedFingers.set(i, FingerName.INDEX);
+				foundIndex = true;
+			}
+			i--;
+		}
+	}
+
+	private void labelUnknowns() {
+		// find first named finger
+		int i = 0;
+		while ((i < namedFingers.size()) && (namedFingers.get(i) == FingerName.UNKNOWN))
+			i++;
+		if (i == namedFingers.size()) // no named fingers found, so give up
+			return;
+
+		FingerName name = namedFingers.get(i);
+		labelPrev(i, name); // fill-in backwards
+		labelFwd(i, name); // fill-in forwards
+	} // end of labelUnknowns()
+
+	private void labelPrev(int i, FingerName name)
+	// move backwards through fingers list labelling unknown fingers
+	{
+		i--;
+		while ((i >= 0) && (name != FingerName.UNKNOWN)) {
+			if (namedFingers.get(i) == FingerName.UNKNOWN) { // unknown finger
+				name = name.getPrev();
+				if (!usedName(name))
+					namedFingers.set(i, name);
+			} else // finger is named already
+				name = namedFingers.get(i);
+			i--;
+		}
+	}
+
+	private void labelFwd(int i, FingerName name)
+	// move forward through fingers list labelling unknown fingers
+	{
+		i++;
+		while ((i < namedFingers.size()) && (name != FingerName.UNKNOWN)) {
+			if (namedFingers.get(i) == FingerName.UNKNOWN) { // unknown finger
+				name = name.getNext();
+				if (!usedName(name))
+					namedFingers.set(i, name);
+			} else // finger is named already
+				name = namedFingers.get(i);
+			i++;
+		}
+	}
+
+	private boolean usedName(FingerName name)
+	// does the fingers list contain name already?
+	{
+		for (FingerName fn : namedFingers)
+			if (fn == name)
+				return true;
+		return false;
+	}
+
 	private static final int MIN_FINGER_DEPTH = 20;
 	private static final int MAX_FINGER_ANGLE = 60; // degrees
 
@@ -496,6 +653,8 @@ public class Handtrack1 {
 	}
 
 	private void initCV() {
+		namedFingers = new ArrayList<>();
+		faceDetector = new CascadeClassifier(Handtrack1.class.getResource("haarcascade_frontalface_alt.xml").getPath());
 		kernelcust = Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, new Size(size, size));
 		tipPts = new Point[max_points];
 		foldPts = new Point[max_points];
@@ -512,7 +671,7 @@ public class Handtrack1 {
 				public void run() {
 					try {
 						capture.read(cap);
-
+						// Core.flip(cap, cap, 1);
 						if (cal) {
 							calibrate(cap);
 						} else {
