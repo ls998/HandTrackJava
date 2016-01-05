@@ -5,9 +5,11 @@ import java.awt.image.BufferedImage;
 
 import javax.swing.JPanel;
 
-public class ImagePanel extends JPanel {
+import org.opencv.core.Mat;
 
-	public BufferedImage image;
+public class ImagePanel extends JPanel implements IFootageOut {
+
+	private BufferedImage image;
 
 	/**
 	 * 
@@ -21,5 +23,10 @@ public class ImagePanel extends JPanel {
 			g.drawImage(image, 0, 0, null); // see javadoc for more info on
 											// the
 											// parameters
+	}
+
+	@Override
+	public void frameOut(Mat frame) {
+		image = Util.mat2Img(frame);
 	}
 }
