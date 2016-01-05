@@ -14,8 +14,8 @@ import javax.swing.JPanel;
 
 import org.opencv.core.Core;
 import org.opencv.core.Mat;
+import org.opencv.highgui.VideoCapture;
 import org.opencv.imgproc.Imgproc;
-import org.opencv.videoio.VideoCapture;
 
 public class VideoCapGUI {
 	

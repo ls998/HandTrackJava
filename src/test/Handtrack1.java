@@ -308,12 +308,9 @@ public class Handtrack1 {
 
 			reduceTips();
 
-			
-			
-			
 			Core.rectangle(im, cogPt, cogPt, new Scalar(0, 255, 255));
 
-			Core.circle(im, biggestBox.center, 2, new Scalar(0,0,255));
+			Core.circle(im, biggestBox.center, 2, new Scalar(0, 0, 255));
 
 			for (Rect rect : faceDetections.toArray()) {
 				Core.rectangle(im, rect.br(), rect.tl(), new Scalar(0, 0, 255));
@@ -327,15 +324,15 @@ public class Handtrack1 {
 				Core.line(im, tipPts[i], endPts[i], new Scalar(255, 255, 255));
 				Core.line(im, endPts[i], foldPts[i], new Scalar(255, 0, 255));
 			}
-			
-			for(int i=0;i<hull.height();i++){
-				int idx1=(int) hull.get(i, 0)[0];
-				int idx2=(int) hull.get((i+1)%hull.height(), 0)[0];
-				
-				double[] dat1=approxContour.get(idx1, 0);
-				double[] dat2=approxContour.get(idx2, 0);
-				
-				Core.line(im, new Point(dat1[0],dat1[1]), new Point(dat2[0],dat2[1]), new Scalar(0,255,0));
+
+			for (int i = 0; i < hull.height(); i++) {
+				int idx1 = (int) hull.get(i, 0)[0];
+				int idx2 = (int) hull.get((i + 1) % hull.height(), 0)[0];
+
+				double[] dat1 = approxContour.get(idx1, 0);
+				double[] dat2 = approxContour.get(idx2, 0);
+
+				Core.line(im, new Point(dat1[0], dat1[1]), new Point(dat2[0], dat2[1]), new Scalar(0, 255, 0));
 			}
 
 			// nameFingers();
@@ -345,8 +342,8 @@ public class Handtrack1 {
 			for (int i = 0; i < fingerTips.size(); i++) {
 				Point tip = fingerTips.get(i);
 
-			//	if (tip.y > cogPt.y)
-				//	continue;
+				// if (tip.y > cogPt.y)
+				// continue;
 
 				count++;
 				Core.circle(im, tip, 3, new Scalar(0, 255, 255));
