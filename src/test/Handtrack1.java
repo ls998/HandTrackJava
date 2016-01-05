@@ -28,31 +28,12 @@ import org.opencv.core.Rect;
 import org.opencv.core.RotatedRect;
 import org.opencv.core.Scalar;
 import org.opencv.core.Size;
+import org.opencv.highgui.VideoCapture;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.imgproc.Moments;
 import org.opencv.objdetect.CascadeClassifier;
-import org.opencv.videoio.VideoCapture;
 
 public class Handtrack1 {
-
-	enum FingerName {
-		LITTLE, RING, MIDDLE, INDEX, THUMB, UNKNOWN;
-
-		public FingerName getNext() {
-			int nextIdx = ordinal() + 1;
-			if (nextIdx == (values().length))
-				nextIdx = 0;
-			return values()[nextIdx];
-		} // end of getNext()
-
-		public FingerName getPrev() {
-			int prevIdx = ordinal() - 1;
-			if (prevIdx < 0)
-				prevIdx = values().length - 1;
-			return values()[prevIdx];
-		} // end of getPrev()
-
-	}
 
 	static {
 
@@ -226,6 +207,8 @@ public class Handtrack1 {
 	private static final int max_points = 20;
 	private static final float smallest_area = 600.0f;
 	private static final int scale = 2;
+	private static final int MIN_FINGER_DEPTH = 20;
+	private static final int MAX_FINGER_ANGLE = 60;
 
 	// settings
 	private Scalar lower = new Scalar(0, 0, 0);
@@ -241,7 +224,7 @@ public class Handtrack1 {
 
 	private Mat kernelcust;
 	private Mat kernel = new Mat();
-	private Point[] tipPts, foldPts;
+	private Point[] tipPts, foldPts, endPts;
 	private double[] depths;
 	private long numPoints;
 	private MatOfInt hull;
@@ -251,6 +234,7 @@ public class Handtrack1 {
 	private ImagePanel panel;
 	private VideoCapture capture;
 	private CascadeClassifier faceDetector;
+	private RotatedRect biggestBox;
 
 	private void hand(Mat im) {
 		// resize to for faster speed
@@ -316,19 +300,42 @@ public class Handtrack1 {
 			Imgproc.approxPolyDP(bigContour, t, 3, true);
 			MatOfPoint approxContour = new MatOfPoint(t.toArray());
 
+			ArrayList<MatOfPoint> contours = new ArrayList<>();
+			contours.add(approxContour);
+			Imgproc.drawContours(im, contours, 0, new Scalar(255, 0, 0));
+
 			toStar(approxContour);
 
 			reduceTips();
 
-			Imgproc.rectangle(im, cogPt, cogPt, new Scalar(0, 255, 255));
+			
+			
+			
+			Core.rectangle(im, cogPt, cogPt, new Scalar(0, 255, 255));
+
+			Core.circle(im, biggestBox.center, 2, new Scalar(0,0,255));
 
 			for (Rect rect : faceDetections.toArray()) {
-				Imgproc.rectangle(im, rect.br(), rect.tl(), new Scalar(0, 0, 255));
+				Core.rectangle(im, rect.br(), rect.tl(), new Scalar(0, 0, 255));
 			}
 
 			for (int i = 0; i < numPoints; i++) {
-				Imgproc.circle(im, tipPts[i], 2, new Scalar(0, 0, 255));
-				Imgproc.circle(im, foldPts[i], 2, new Scalar(255, 0, 0));
+				Core.circle(im, tipPts[i], 2, new Scalar(0, 0, 255));
+				Core.circle(im, foldPts[i], 2, new Scalar(255, 0, 0));
+				Core.circle(im, endPts[i], 2, new Scalar(0, 255, 0));
+				Core.line(im, tipPts[i], foldPts[i], new Scalar(255, 0, 255));
+				Core.line(im, tipPts[i], endPts[i], new Scalar(255, 255, 255));
+				Core.line(im, endPts[i], foldPts[i], new Scalar(255, 0, 255));
+			}
+			
+			for(int i=0;i<hull.height();i++){
+				int idx1=(int) hull.get(i, 0)[0];
+				int idx2=(int) hull.get((i+1)%hull.height(), 0)[0];
+				
+				double[] dat1=approxContour.get(idx1, 0);
+				double[] dat2=approxContour.get(idx2, 0);
+				
+				Core.line(im, new Point(dat1[0],dat1[1]), new Point(dat2[0],dat2[1]), new Scalar(0,255,0));
 			}
 
 			// nameFingers();
@@ -338,13 +345,13 @@ public class Handtrack1 {
 			for (int i = 0; i < fingerTips.size(); i++) {
 				Point tip = fingerTips.get(i);
 
-				if (tip.y > cogPt.y)
-					continue;
+			//	if (tip.y > cogPt.y)
+				//	continue;
 
 				count++;
-				Imgproc.circle(im, tip, 3, new Scalar(0, 255, 255));
+				Core.circle(im, tip, 3, new Scalar(0, 255, 255));
 			}
-			Imgproc.putText(im, "" + count, new Point(0, 100), 1, 2, new Scalar(0, 0, 0));
+			Core.putText(im, "" + count, new Point(0, 100), 1, 2, new Scalar(0, 0, 0));
 		}
 		sz = new Size(im.width() * scale, im.height() * scale);
 
@@ -365,7 +372,7 @@ public class Handtrack1 {
 			System.out.println("Processing " + max_points + " defect pts");
 			numPoints = max_points;
 		}
-		// copy defect information from defects sequence into arrays
+
 		for (int i = 0; i < numPoints; i++) {
 			double[] dat = defects.get(i, 0);
 
@@ -373,126 +380,18 @@ public class Handtrack1 {
 
 			Point startPt = new Point(startdat[0], startdat[1]);
 
-			tipPts[i] = new Point((int) Math.round(startPt.x), (int) Math.round(startPt.y));
+			tipPts[i] = startPt;
 
-			// array contains coords of the fingertips
-
-			// double[] enddat = approxContour.get((int) dat[1], 0);
-			// Point endPt = new Point(enddat[0], enddat[1]);
+			double[] enddat = approxContour.get((int) dat[1], 0);
+			endPts[i] = new Point(enddat[0], enddat[1]);
 
 			double[] depthdat = approxContour.get((int) dat[2], 0);
 			Point depthPt = new Point(depthdat[0], depthdat[1]);
-			foldPts[i] = new Point((int) Math.round(depthPt.x), (int) Math.round(depthPt.y));
-			// array contains coords of the skin fold between fingers
+			foldPts[i] = depthPt;
 
 			depths[i] = dat[3];
-			// array contains distances from tips to folds
 		}
 	}
-
-	// globals
-	private static final int MIN_THUMB = 120; // angle ranges
-	private static final int MAX_THUMB = 200;
-
-	private static final int MIN_INDEX = 60;
-	private static final int MAX_INDEX = 120;
-
-	// globals
-	private ArrayList<FingerName> namedFingers;
-
-	private void nameFingers() { // reset all named fingers to unknown
-		namedFingers.clear();
-		for (int i = 0; i < fingerTips.size(); i++)
-			namedFingers.add(FingerName.UNKNOWN);
-
-		labelThumbIndex();
-		labelUnknowns();
-	}
-
-	private int angleToCOG(Point tipPt) {
-		int yOffset = (int) (cogPt.y - tipPt.y); // make y positive up screen
-		int xOffset = (int) (tipPt.x - cogPt.x);
-		double theta = Math.atan2(yOffset, xOffset);
-		int angleTip = (int) Math.round(Math.toDegrees(theta));
-		return angleTip - 90;
-	}
-
-	private void labelThumbIndex() {
-		boolean foundThumb = false;
-		boolean foundIndex = false;
-		int i = fingerTips.size() - 1;
-		while ((i >= 0)) {
-			int angle = angleToCOG(fingerTips.get(i));
-			// check for thumb
-			if ((angle <= MAX_THUMB) && (angle > MIN_THUMB) && !foundThumb) {
-				namedFingers.set(i, FingerName.THUMB);
-				foundThumb = true;
-			}
-
-			// check for index
-			if ((angle <= MAX_INDEX) && (angle > MIN_INDEX) && !foundIndex) {
-				namedFingers.set(i, FingerName.INDEX);
-				foundIndex = true;
-			}
-			i--;
-		}
-	}
-
-	private void labelUnknowns() {
-		// find first named finger
-		int i = 0;
-		while ((i < namedFingers.size()) && (namedFingers.get(i) == FingerName.UNKNOWN))
-			i++;
-		if (i == namedFingers.size()) // no named fingers found, so give up
-			return;
-
-		FingerName name = namedFingers.get(i);
-		labelPrev(i, name); // fill-in backwards
-		labelFwd(i, name); // fill-in forwards
-	} // end of labelUnknowns()
-
-	private void labelPrev(int i, FingerName name)
-	// move backwards through fingers list labelling unknown fingers
-	{
-		i--;
-		while ((i >= 0) && (name != FingerName.UNKNOWN)) {
-			if (namedFingers.get(i) == FingerName.UNKNOWN) { // unknown finger
-				name = name.getPrev();
-				if (!usedName(name))
-					namedFingers.set(i, name);
-			} else // finger is named already
-				name = namedFingers.get(i);
-			i--;
-		}
-	}
-
-	private void labelFwd(int i, FingerName name)
-	// move forward through fingers list labelling unknown fingers
-	{
-		i++;
-		while ((i < namedFingers.size()) && (name != FingerName.UNKNOWN)) {
-			if (namedFingers.get(i) == FingerName.UNKNOWN) { // unknown finger
-				name = name.getNext();
-				if (!usedName(name))
-					namedFingers.set(i, name);
-			} else // finger is named already
-				name = namedFingers.get(i);
-			i++;
-		}
-	}
-
-	private boolean usedName(FingerName name)
-	// does the fingers list contain name already?
-	{
-		for (FingerName fn : namedFingers)
-			if (fn == name)
-				return true;
-		return false;
-	}
-
-	private static final int MIN_FINGER_DEPTH = 20;
-	private static final int MAX_FINGER_ANGLE = 60;
-	private static final int MIN_FINGER_ANGLE = 15;
 
 	private void reduceTips() {
 		fingerTips.clear();
@@ -531,6 +430,7 @@ public class Handtrack1 {
 		// find biggest
 		double maxArea = smallest_area;
 		MatOfPoint2f biggestContour = null;
+		biggestBox = null;
 
 		for (MatOfPoint contour : contours) {
 			// makes sure isn't empty contour
@@ -544,6 +444,7 @@ public class Handtrack1 {
 					if (area > maxArea) {
 						maxArea = area;
 						biggestContour = thing;
+						biggestBox = box;
 					}
 				}
 			}
@@ -553,9 +454,9 @@ public class Handtrack1 {
 
 	private void contInf(MatOfPoint2f contour) {
 		Moments moments = Imgproc.moments(contour, true);
-		double m00 = moments.m00;
-		double m10 = moments.m10;
-		double m01 = moments.m01;
+		double m00 = moments.get_m00();
+		double m10 = moments.get_m10();
+		double m01 = moments.get_m01();
 		if (m00 != 0) { // calculate center
 			cogPt.x = (int) Math.round(m10 / m00);
 			cogPt.y = (int) Math.round(m01 / m00);
@@ -586,20 +487,20 @@ public class Handtrack1 {
 
 		Imgproc.cvtColor(im, im, Imgproc.COLOR_HSV2BGR);
 
-		Imgproc.rectangle(im, new Point(d.getX(), d.getY()), new Point(d.getX() + 50, d.getY() + 50),
+		Core.rectangle(im, new Point(d.getX(), d.getY()), new Point(d.getX() + 50, d.getY() + 50),
 				new Scalar(0, 255, 0));
-		Imgproc.putText(im, ((int) mean.val[0]) + "," + ((int) mean.val[1]) + "," + ((int) mean.val[2]),
+		Core.putText(im, ((int) mean.val[0]) + "," + ((int) mean.val[1]) + "," + ((int) mean.val[2]),
 				new Point(170, 170), 1, 1, new Scalar(0, 255, 0));
 	}
 
 	private void initCV() {
-		namedFingers = new ArrayList<>();
 		faceDetector = new CascadeClassifier(
 				"C:\\Users\\sunny\\lib\\opencv-3.1.0\\sources\\data\\haarcascades\\haarcascade_frontalface_alt.xml");
 		kernelcust = Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, new Size(size, size));
 		tipPts = new Point[max_points];
 		foldPts = new Point[max_points];
 		depths = new double[max_points];
+		endPts = new Point[max_points];
 		fingerTips = new ArrayList<>();
 		cogPt = new Point();
 		capture = new VideoCapture();
@@ -617,7 +518,7 @@ public class Handtrack1 {
 						} else {
 							hand(cap);
 						}
-						Imgproc.putText(cap,
+						Core.putText(cap,
 								((int) range.val[0]) + "," + ((int) range.val[1]) + "," + ((int) range.val[2]),
 								new Point(0, 15), 1, 1, new Scalar(0, 255, 0));
 
