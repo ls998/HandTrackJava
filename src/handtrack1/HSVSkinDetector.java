@@ -19,16 +19,9 @@ public class HSVSkinDetector implements ISkinDetector, IConfigurable {
 	private static final String lsetting = "lower";
 	private static final String usetting = "upper";
 
-	private Mat tmp;
-
-	public HSVSkinDetector() {
-		tmp = new Mat();
-	}
-
 	@Override
-	public Mat filterSkin(Mat image) {
-		Core.inRange(image, HSVLower, HSVUpper, tmp);
-		return tmp;
+	public void filterSkin(Mat image, Mat filteredBinaryImage) {
+		Core.inRange(image, HSVLower, HSVUpper, filteredBinaryImage);
 	}
 
 	@Override
