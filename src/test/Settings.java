@@ -14,15 +14,15 @@ public class Settings {
 	public static void main(String[] args) {
 		SettingsNode settingsNode = new SettingsNode();
 		SettingsNode uppertmp = new SettingsNode();
-		uppertmp.write(hsetting, "0");
-		uppertmp.write(ssetting, "0");
-		uppertmp.write(vsetting, "0");
+		uppertmp.put(hsetting, "0");
+		uppertmp.put(ssetting, "0");
+		uppertmp.put(vsetting, "0");
 		SettingsNode lowertmp = new SettingsNode();
-		lowertmp.write(hsetting, "0");
-		lowertmp.write(ssetting, "0");
-		lowertmp.write(vsetting, "0");
-		settingsNode.write(lsetting, lowertmp.getSettingsString());
-		settingsNode.write(usetting, uppertmp.getSettingsString());
+		lowertmp.put(hsetting, "0");
+		lowertmp.put(ssetting, "0");
+		lowertmp.put(vsetting, "0");
+		settingsNode.put(lsetting, lowertmp.getSettingsString());
+		settingsNode.put(usetting, uppertmp.getSettingsString());
 		System.out.println(settingsNode.getSettingsString());
 
 		SettingsNode derp = new SettingsNode();
