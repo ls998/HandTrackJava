@@ -17,10 +17,13 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import javax.swing.DefaultComboBoxModel;
+import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
+import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JSeparator;
 
 import org.opencv.core.Core;
 import org.opencv.core.Mat;
@@ -33,10 +36,6 @@ import handtrack1.resources.ResourceManager;
 import handtrack1.settings.IConfigurable;
 import handtrack1.settings.SettingsNode;
 import handtrack1.settings.SettingsPersistence;
-import javax.swing.JButton;
-import javax.swing.JLabel;
-import javax.swing.JSeparator;
-import javax.swing.JTabbedPane;
 
 public class Handtrack implements IConsumer, IConfigurable {
 	private JFrame frame;
@@ -91,7 +90,7 @@ public class Handtrack implements IConsumer, IConfigurable {
 			}
 		});
 		
-		lblMode = new JLabel("Mode:");
+		JLabel lblMode = new JLabel("Mode:");
 		controlPanel.add(lblMode);
 		displayStateSelector.setSelectedIndex(2);
 		controlPanel.add(displayStateSelector);
@@ -112,7 +111,7 @@ public class Handtrack implements IConsumer, IConfigurable {
 			}
 		});
 		
-		separator = new JSeparator();
+		JSeparator separator = new JSeparator();
 		controlPanel.add(separator);
 		controlPanel.add(btnLoadSettings);
 
@@ -164,8 +163,6 @@ public class Handtrack implements IConsumer, IConfigurable {
 
 	// toolchain management
 	private Map<String, Object> toolchain;
-	private JLabel lblMode;
-	private JSeparator separator;
 
 	private void initCV() {
 		System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
