@@ -2,6 +2,7 @@ package handtrack1.settings;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 public class SettingsNode implements IConfigurable {
 
@@ -12,7 +13,11 @@ public class SettingsNode implements IConfigurable {
 	private static final char escape = '\\';
 	private static final String block = "##";
 
-	public void write(String key, String value) {
+	public SettingsNode() {
+		map = new HashMap<String, String>();
+	}
+
+	public void put(String key, String value) {
 		if (key.contains(openchar + "") || key.contains(closechar + "") || key.contains(escape + ""))
 			throw new IllegalArgumentException("Key contains invalid characters");
 		map.put(key, value);
@@ -26,8 +31,8 @@ public class SettingsNode implements IConfigurable {
 		return map.get(key);
 	}
 
-	public SettingsNode() {
-		map = new HashMap<String, String>();
+	public Set<String> getSettings() {
+		return map.keySet();
 	}
 
 	@Override
