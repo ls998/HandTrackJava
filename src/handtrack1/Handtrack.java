@@ -6,14 +6,18 @@ import java.awt.FlowLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.image.BufferedImage;
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.JComboBox;
+import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 
@@ -26,9 +30,11 @@ import handtrack1.caching.MappedCacheManager;
 import handtrack1.resources.IConsumer;
 import handtrack1.resources.ResourceManager;
 import handtrack1.settings.SettingsPersistence;
+import javax.swing.JButton;
 
 public class Handtrack implements IConsumer {
 	private JFrame frame;
+	private JComboBox<DisplayState> displayStateSelector;
 
 	/**
 	 * Launch the application.
@@ -65,7 +71,7 @@ public class Handtrack implements IConsumer {
 		outputPanel = new ImagePanel(640, 480, BufferedImage.TYPE_3BYTE_BGR);
 		frame.getContentPane().add(outputPanel, BorderLayout.CENTER);
 
-		controlPanel = new JPanel();
+		JPanel controlPanel = new JPanel();
 		frame.getContentPane().add(controlPanel, BorderLayout.SOUTH);
 		controlPanel.setLayout(new FlowLayout(FlowLayout.CENTER, 5, 5));
 
@@ -80,6 +86,26 @@ public class Handtrack implements IConsumer {
 		});
 		displayStateSelector.setSelectedIndex(2);
 		controlPanel.add(displayStateSelector);
+
+		JButton btnLoadSettings = new JButton("Load Settings");
+		btnLoadSettings.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent arg0) {
+				JFileChooser fc = new JFileChooser();
+				int returnVal = fc.showOpenDialog(frame);
+				if (returnVal == JFileChooser.APPROVE_OPTION) {
+					try {
+						settingsManager.load(fc.getSelectedFile().getAbsolutePath());
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+				}
+			}
+		});
+		controlPanel.add(btnLoadSettings);
+
+		JButton btnSaveSettings = new JButton("Save Settings");
+		btnSaveSettings.setEnabled(false);
+		controlPanel.add(btnSaveSettings);
 	}
 
 	private static enum DisplayState {
@@ -91,10 +117,11 @@ public class Handtrack implements IConsumer {
 
 	private DisplayState displayState;
 
-	private static final String settingsFileLocation = "C:\\Users\\sunny\\derp.conf";
-
 	// resources
 	private MappedCacheManager<Mat> opencvMatCache;
+	private SettingsPersistence settingsManager;
+
+	// resource management
 	private ResourceManager resourceManager;
 	private List<IConsumer> resourceConsumers;
 
@@ -106,8 +133,9 @@ public class Handtrack implements IConsumer {
 	private IFingerFinder fingerFinder;
 	private IHandInfoFinder handInfoFinder;
 	private IFootageOut footageOut;
-	private JPanel controlPanel;
-	private JComboBox<DisplayState> displayStateSelector;
+
+	// toolchain management
+	private Map<String, Object> toolchain;
 
 	private void initCV() {
 		System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
@@ -119,12 +147,24 @@ public class Handtrack implements IConsumer {
 		resourceManager.addResource("MappedCacheManager<List<MatOfPoint>>", new MappedCacheManager<List<MatOfPoint>>());
 		resourceConsumers = new ArrayList<>();
 
-		// create toolchain
+		// initialize toolchain framework
+		toolchain = new HashMap<>();
+
+		// create toolchain objects
 		footageIn = new OpenCVFootageIn();
 		skinDetector = new HSVSkinDetector();
 		handContourFinder = new BiggestContour();
 		convexityDefectFinder = new ConvexityDefects();
+
 		footageOut = outputPanel;
+		
+		//link toolchain objects to toolchain framework
+		toolchain.put("footageIn", footageIn);
+		toolchain.put("skinDetector", skinDetector);
+		toolchain.put("handContourFinder", handContourFinder);
+		toolchain.put("convexityDefectFinder", convexityDefectFinder);
+		
+		toolchain.put("footageOut", footageOut);
 
 		resourceConsumers.add(this);
 
@@ -201,6 +241,7 @@ public class Handtrack implements IConsumer {
 	@Override
 	public void loadResources(ResourceManager resourceManager) {
 		opencvMatCache = resourceManager.getResource("MappedCacheManager<Mat>");
+		settingsManager = resourceManager.getResource("SettingsPersistence");
 		opencvMatCache.setReference("captured frame", new Mat());
 		opencvMatCache.setReference("skin binary image", new Mat());
 	}
