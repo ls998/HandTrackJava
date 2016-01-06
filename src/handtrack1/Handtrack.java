@@ -34,6 +34,9 @@ import handtrack1.settings.IConfigurable;
 import handtrack1.settings.SettingsNode;
 import handtrack1.settings.SettingsPersistence;
 import javax.swing.JButton;
+import javax.swing.JLabel;
+import javax.swing.JSeparator;
+import javax.swing.JTabbedPane;
 
 public class Handtrack implements IConsumer, IConfigurable {
 	private JFrame frame;
@@ -87,6 +90,9 @@ public class Handtrack implements IConsumer, IConfigurable {
 				displayState = (DisplayState) displayStateSelector.getSelectedItem();
 			}
 		});
+		
+		lblMode = new JLabel("Mode:");
+		controlPanel.add(lblMode);
 		displayStateSelector.setSelectedIndex(2);
 		controlPanel.add(displayStateSelector);
 
@@ -105,6 +111,9 @@ public class Handtrack implements IConsumer, IConfigurable {
 				}
 			}
 		});
+		
+		separator = new JSeparator();
+		controlPanel.add(separator);
 		controlPanel.add(btnLoadSettings);
 
 		JButton btnSaveSettings = new JButton("Save Settings");
@@ -155,6 +164,8 @@ public class Handtrack implements IConsumer, IConfigurable {
 
 	// toolchain management
 	private Map<String, Object> toolchain;
+	private JLabel lblMode;
+	private JSeparator separator;
 
 	private void initCV() {
 		System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
