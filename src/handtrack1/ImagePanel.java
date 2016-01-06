@@ -2,6 +2,7 @@ package handtrack1;
 
 import java.awt.Graphics;
 import java.awt.image.BufferedImage;
+import java.awt.image.DataBufferByte;
 
 import javax.swing.JPanel;
 
@@ -10,6 +11,10 @@ import org.opencv.core.Mat;
 public class ImagePanel extends JPanel implements IFootageOut {
 
 	private BufferedImage image;
+
+	public ImagePanel(int width, int height, int imageType) {
+		image = new BufferedImage(width, height, imageType);
+	}
 
 	/**
 	 * 
@@ -27,6 +32,9 @@ public class ImagePanel extends JPanel implements IFootageOut {
 
 	@Override
 	public void frameOut(Mat frame) {
-		image = Util.mat2Img(frame);
+		BufferedImage buffer = image;
+		byte[] data = ((DataBufferByte) buffer.getRaster().getDataBuffer()).getData();
+		frame.get(0, 0, data);
+		this.repaint();
 	}
 }
