@@ -28,15 +28,15 @@ public class HSVSkinDetector implements ISkinDetector, IConfigurable {
 	public String getSettingsString() {
 		SettingsNode settingsNode = new SettingsNode();
 		SettingsNode uppertmp = new SettingsNode();
-		uppertmp.write(hsetting, Double.toString(HSVUpper.val[0]));
-		uppertmp.write(ssetting, Double.toString(HSVUpper.val[1]));
-		uppertmp.write(vsetting, Double.toString(HSVUpper.val[2]));
+		uppertmp.put(hsetting, Double.toString(HSVUpper.val[0]));
+		uppertmp.put(ssetting, Double.toString(HSVUpper.val[1]));
+		uppertmp.put(vsetting, Double.toString(HSVUpper.val[2]));
 		SettingsNode lowertmp = new SettingsNode();
-		lowertmp.write(hsetting, Double.toString(HSVLower.val[0]));
-		lowertmp.write(ssetting, Double.toString(HSVLower.val[1]));
-		lowertmp.write(vsetting, Double.toString(HSVLower.val[2]));
-		settingsNode.write(lsetting, lowertmp.getSettingsString());
-		settingsNode.write(usetting, uppertmp.getSettingsString());
+		lowertmp.put(hsetting, Double.toString(HSVLower.val[0]));
+		lowertmp.put(ssetting, Double.toString(HSVLower.val[1]));
+		lowertmp.put(vsetting, Double.toString(HSVLower.val[2]));
+		settingsNode.put(lsetting, lowertmp.getSettingsString());
+		settingsNode.put(usetting, uppertmp.getSettingsString());
 		return settingsNode.getSettingsString();
 	}
 
