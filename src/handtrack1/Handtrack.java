@@ -6,6 +6,7 @@ import java.awt.FlowLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.image.BufferedImage;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -29,10 +30,12 @@ import handtrack1.IFootageIn.FootageEndedException;
 import handtrack1.caching.MappedCacheManager;
 import handtrack1.resources.IConsumer;
 import handtrack1.resources.ResourceManager;
+import handtrack1.settings.IConfigurable;
+import handtrack1.settings.SettingsNode;
 import handtrack1.settings.SettingsPersistence;
 import javax.swing.JButton;
 
-public class Handtrack implements IConsumer {
+public class Handtrack implements IConsumer, IConfigurable {
 	private JFrame frame;
 	private JComboBox<DisplayState> displayStateSelector;
 
@@ -95,6 +98,7 @@ public class Handtrack implements IConsumer {
 				if (returnVal == JFileChooser.APPROVE_OPTION) {
 					try {
 						settingsManager.load(fc.getSelectedFile().getAbsolutePath());
+						loadSettings(settingsManager.getRootNode().get(settings_name));
 					} catch (IOException e) {
 						e.printStackTrace();
 					}
@@ -104,13 +108,28 @@ public class Handtrack implements IConsumer {
 		controlPanel.add(btnLoadSettings);
 
 		JButton btnSaveSettings = new JButton("Save Settings");
-		btnSaveSettings.setEnabled(false);
+		btnSaveSettings.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent arg0) {
+				JFileChooser fc = new JFileChooser();
+				int returnVal = fc.showOpenDialog(frame);
+				if (returnVal == JFileChooser.APPROVE_OPTION) {
+					try {
+						settingsManager.getRootNode().put(settings_name, getSettingsString());
+						settingsManager.save(fc.getSelectedFile().getAbsolutePath());
+					} catch (FileNotFoundException e) {
+						e.printStackTrace();
+					}
+				}
+			}
+		});
 		controlPanel.add(btnSaveSettings);
 	}
 
 	private static enum DisplayState {
 		hand, calibrate, pause
 	}
+
+	private static final String settings_name = "handtrack";
 
 	private ImagePanel outputPanel;
 	private ScheduledExecutorService timer;
@@ -157,13 +176,13 @@ public class Handtrack implements IConsumer {
 		convexityDefectFinder = new ConvexityDefects();
 
 		footageOut = outputPanel;
-		
-		//link toolchain objects to toolchain framework
+
+		// link toolchain objects to toolchain framework
 		toolchain.put("footageIn", footageIn);
 		toolchain.put("skinDetector", skinDetector);
 		toolchain.put("handContourFinder", handContourFinder);
 		toolchain.put("convexityDefectFinder", convexityDefectFinder);
-		
+
 		toolchain.put("footageOut", footageOut);
 
 		resourceConsumers.add(this);
@@ -249,5 +268,27 @@ public class Handtrack implements IConsumer {
 	private void addResourceUser(Object consumer) {
 		if (consumer instanceof IConsumer)
 			resourceConsumers.add((IConsumer) consumer);
+	}
+
+	@Override
+	public String getSettingsString() {
+		SettingsNode node = new SettingsNode();
+		for (String key : toolchain.keySet()) {
+			Object value = toolchain.get(key);
+			if (value instanceof IConfigurable) {
+				node.put(key, ((IConfigurable) value).getSettingsString());
+			}
+		}
+		return node.getSettingsString();
+	}
+
+	@Override
+	public void loadSettings(String settings) {
+		SettingsNode node = new SettingsNode();
+		node.loadSettings(settings);
+		for (String key : node.getSettings()) {
+			String value = node.get(key);
+			((IConfigurable) toolchain.get(key)).loadSettings(value);
+		}
 	}
 }
