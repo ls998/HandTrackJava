@@ -52,6 +52,7 @@ public class BiggestContour implements IHandContourFinder, IConsumer, IConfigura
 	@Override
 	public void loadResources(ResourceManager resourceManager) {
 		listCacheManager = resourceManager.getResource("MappedCacheManager<List<MatOfPoint>>");
+		matCacheManager = resourceManager.getResource("MappedCacheManager<Mat>");
 		listCacheManager.setReference("contour list", new ArrayList<>());
 		matCacheManager.setReference("filler mat", new Mat());
 	}
