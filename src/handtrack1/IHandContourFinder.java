@@ -4,5 +4,5 @@ import org.opencv.core.Mat;
 import org.opencv.core.MatOfPoint;
 
 public interface IHandContourFinder {
-	public MatOfPoint findHandContour(Mat image);
+	public void findHandContour(Mat image, MatOfPoint handContour);
 }
