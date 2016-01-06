@@ -9,7 +9,6 @@ import java.io.PrintStream;
 
 public class SettingsPersistence {
 	private SettingsNode rootNode;
-	private String filename;
 
 	public SettingsPersistence() {
 		rootNode = new SettingsNode();
@@ -20,7 +19,6 @@ public class SettingsPersistence {
 	}
 
 	public void load(String file) throws IOException {
-		filename = file;
 		InputStream is = new FileInputStream(file);
 		byte[] buffer = new byte[256];
 		StringBuilder sb = new StringBuilder();
@@ -34,8 +32,8 @@ public class SettingsPersistence {
 		is.close();
 	}
 
-	public void save() throws FileNotFoundException {
-		PrintStream ps = new PrintStream(new FileOutputStream(filename));
+	public void save(String file) throws FileNotFoundException {
+		PrintStream ps = new PrintStream(new FileOutputStream(file));
 		ps.print(rootNode.getSettingsString());
 		ps.close();
 	}
