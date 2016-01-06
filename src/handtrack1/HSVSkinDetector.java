@@ -9,8 +9,8 @@ import handtrack1.settings.SettingsNode;
 
 public class HSVSkinDetector implements ISkinDetector, IConfigurable {
 
-	public Scalar HSVUpper;
-	public Scalar HSVLower;
+	public Scalar HSVUpper = new Scalar(0, 0, 0);
+	public Scalar HSVLower = new Scalar(0, 0, 0);
 
 	private static final String hsetting = "hue";
 	private static final String ssetting = "sat";
